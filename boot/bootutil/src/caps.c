@@ -44,6 +44,8 @@ uint32_t bootutil_get_caps(void)
     res |= BOOTUTIL_CAP_OVERWRITE_UPGRADE;
 #elif defined(MCUBOOT_SWAP_USING_MOVE)
     res |= BOOTUTIL_CAP_SWAP_USING_MOVE;
+#elif defined(MCUBOOT_DIRECT_XIP)
+    res |= BOOTUTIL_CAP_DIRECT_XIP;
 #else
     res |= BOOTUTIL_CAP_SWAP_USING_SCRATCH;
 #endif
