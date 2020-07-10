@@ -273,6 +273,11 @@ int flash_area_id_from_multi_image_slot(int image_index, int slot)
     return -1; /* flash_area_open will fail on that */
 }
 
+int flash_area_id_from_image_slot(int slot)
+{
+    return flash_area_id_from_multi_image_slot(0, slot);
+}
+
 int flash_area_open(uint8_t id, const struct flash_area **area)
 {
     uint32_t i;
