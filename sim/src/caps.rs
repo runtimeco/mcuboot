@@ -29,6 +29,7 @@ pub enum Caps {
     SwapUsingMove        = (1 << 11),
     DowngradePrevention  = (1 << 12),
     EncX25519            = (1 << 13),
+    DirectXIP            = (1 << 14),
 }
 
 impl Caps {
