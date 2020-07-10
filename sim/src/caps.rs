@@ -44,6 +44,12 @@ impl Caps {
         (unsafe { bootutil_get_num_images() }) as usize
     }
 
+    /// Return true if this configuration performs an image swap.
+    pub fn has_swap() -> bool {
+        Caps::SwapUsingScratch.present() ||
+            Caps::SwapUsingMove.present()
+    }
+
     /// For debugging, print all of the Caps we are compiled for.
     pub fn show() {
         println!("Capabilities: {}", unsafe { bootutil_get_caps() });
