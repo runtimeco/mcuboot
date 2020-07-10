@@ -29,6 +29,9 @@ overwrite-only = []
 
 swap-move = []
 
+# Direct execute in place mode.
+direct-xip = []
+
 # Disable validation of the primary slot
 validate-primary-slot = []
 

@@ -22,6 +22,7 @@ bootstrap = ["mcuboot-sys/bootstrap"]
 multiimage = ["mcuboot-sys/multiimage"]
 large-write = []
 downgrade-prevention = ["mcuboot-sys/downgrade-prevention"]
+direct-xip = ["mcuboot-sys/direct-xip"]
 
 [dependencies]
 byteorder = "1.3"
