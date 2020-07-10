@@ -6,8 +6,13 @@
 
 // Query the bootloader's capabilities.
 
+use enum_iterator::IntoEnumIterator;
+use std::{
+    fmt,
+};
+
 #[repr(u32)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, IntoEnumIterator, PartialEq)]
 #[allow(unused)]
 pub enum Caps {
     RSA2048              = (1 << 0),
@@ -36,6 +41,28 @@ impl Caps {
     /// MCUboot build.
     pub fn get_num_images() -> usize {
         (unsafe { bootutil_get_num_images() }) as usize
+    }
+
+    /// For debugging, print all of the Caps we are compiled for.
+    pub fn show() {
+        println!("Capabilities: {}", unsafe { bootutil_get_caps() });
+    }
+}
+
+impl fmt::Display for Caps {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut comma = false;
+        write!(f, "{{")?;
+        for cap in Caps::into_enum_iter() {
+            if (cap as u32) & (*self as u32) != 0 {
+                if comma {
+                    write!(f, ",")?;
+                }
+                comma = true;
+                write!(f, "{:?}", cap)?;
+            }
+        }
+        write!(f, "}}")
     }
 }
 
