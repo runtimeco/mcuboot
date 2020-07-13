@@ -29,8 +29,10 @@ pub fn boot_go(multiflash: &mut SimMultiFlash, areadesc: &AreaDesc,
         c_catch_asserts: if catch_asserts { 1 } else { 0 },
         boot_jmpbuf: [0; 16],
     };
+    let mut rsp: raw::BootRsp = Default::default();
     let result = unsafe {
-        raw::invoke_boot_go(&mut sim_ctx as *mut _, &areadesc.get_c() as *const _) as i32
+        raw::invoke_boot_go(&mut sim_ctx as *mut _, &areadesc.get_c() as *const _,
+            &mut rsp as *mut _) as i32
     };
     let asserts = sim_ctx.c_asserts;
     counter.map(|c| *c = sim_ctx.flash_counter);
@@ -85,11 +87,36 @@ mod raw {
     use crate::api::CSimContext;
     use libc;
 
+    #[repr(C)]
+    #[derive(Debug)]
+    pub struct ImageHeader {
+        nothing: u32,
+    }
+
+    #[repr(C)]
+    #[derive(Debug)]
+    pub struct BootRsp {
+        hdr: *const ImageHeader,
+        flash_dev_id: u8,
+        image_off: u32,
+    }
+
+    impl Default for BootRsp {
+        fn default() -> BootRsp {
+            BootRsp {
+                hdr: std::ptr::null(),
+                flash_dev_id: 0,
+                image_off: 0,
+            }
+        }
+    }
+
     extern "C" {
         // This generates a warning about `CAreaDesc` not being foreign safe.  There doesn't appear to
         // be any way to get rid of this warning.  See https://github.com/rust-lang/rust/issues/34798
         // for information and tracking.
-        pub fn invoke_boot_go(sim_ctx: *mut CSimContext, areadesc: *const CAreaDesc) -> libc::c_int;
+        pub fn invoke_boot_go(sim_ctx: *mut CSimContext, areadesc: *const CAreaDesc,
+                              rsp: *mut BootRsp) -> libc::c_int;
 
         pub fn boot_trailer_sz(min_write_sz: u32) -> u32;
         pub fn boot_status_sz(min_write_sz: u32) -> u32;

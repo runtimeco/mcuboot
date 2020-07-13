@@ -224,10 +224,10 @@ struct area_desc {
     uint32_t num_slots;
 };
 
-int invoke_boot_go(struct sim_context *ctx, struct area_desc *adesc)
+int invoke_boot_go(struct sim_context *ctx, struct area_desc *adesc,
+		   struct boot_rsp *rsp)
 {
     int res;
-    struct boot_rsp rsp;
     struct boot_loader_state *state;
 
 #if defined(MCUBOOT_SIGN_RSA)
@@ -241,11 +241,11 @@ int invoke_boot_go(struct sim_context *ctx, struct area_desc *adesc)
     sim_set_context(ctx);
 
     if (setjmp(ctx->boot_jmpbuf) == 0) {
-        res = context_boot_go(state, &rsp);
+        res = context_boot_go(state, rsp);
         sim_reset_flash_areas();
         sim_reset_context();
         free(state);
-        /* printf("boot_go off: %d (0x%08x)\n", res, rsp.br_image_off); */
+        /* printf("boot_go off: %d (0x%08x)\n", res, rsp->br_image_off); */
         return res;
     } else {
         sim_reset_flash_areas();
