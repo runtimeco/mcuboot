@@ -903,6 +903,35 @@ impl Images {
         }
     }
 
+    /// Run a basic test of upgrades with images in the direct-xip case.
+    pub fn run_direct_xip(&self) -> bool {
+        if !Caps::DirectXIP.present() {
+            return false;
+        }
+
+        // Clone the flash, but we only need a single flash because we will
+        // verify that it is unchanged.
+        let mut flash = self.flash.clone();
+
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
+            warn!("Failed to detect upgrade");
+            return true;
+        }
+
+        // Find the corresponding area.
+        if let Some((offset, _, id)) = self.areadesc.find(FlashId::Image1) {
+            if id != result.flash_dev_id || offset != result.image_offset as usize {
+                warn!("Direct-xip didn't find right image");
+                return true;
+            }
+        } else {
+            panic!("Device doesn't appear to have an Image1 area at all");
+        }
+
+        false
+    }
+
     /// Adds a new flash area that fails statistically
     fn mark_bad_status_with_rate(&self, flash: &mut SimMultiFlash, slot: usize,
                                  rate: f32) {
