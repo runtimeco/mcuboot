@@ -18,6 +18,10 @@ pub struct BootStatus {
     pub result: i32,
     /// If catching asserts, returns a count of asserts caught.
     pub asserts: u8,
+    /// Id of flash device to boot from.
+    pub flash_dev_id: u8,
+    /// Offset within flash device for bootable code.
+    pub image_offset: u32,
 }
 
 impl BootStatus {
@@ -56,7 +60,12 @@ pub fn boot_go(multiflash: &mut SimMultiFlash, areadesc: &AreaDesc,
             api::clear_flash(dev_id);
         }
     };
-    BootStatus { result, asserts }
+    BootStatus {
+        result,
+        asserts,
+        flash_dev_id: rsp.flash_dev_id,
+        image_offset: rsp.image_off,
+    }
 }
 
 pub fn boot_trailer_sz(align: u32) -> u32 {
@@ -112,8 +121,8 @@ mod raw {
     #[derive(Debug)]
     pub struct BootRsp {
         hdr: *const ImageHeader,
-        flash_dev_id: u8,
-        image_off: u32,
+        pub flash_dev_id: u8,
+        pub image_off: u32,
     }
 
     impl Default for BootRsp {
