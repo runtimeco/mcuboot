@@ -11,9 +11,24 @@ use simflash::SimMultiFlash;
 use libc;
 use crate::api;
 
+/// Status from an invocation of `boot_go`.
+#[derive(Debug)]
+pub struct BootStatus {
+    /// The integer result from the call.  Zero is a successful boot.
+    pub result: i32,
+    /// If catching asserts, returns a count of asserts caught.
+    pub asserts: u8,
+}
+
+impl BootStatus {
+    pub fn is_success(&self) -> bool {
+        self.result == 0
+    }
+}
+
 /// Invoke the bootloader on this flash device.
 pub fn boot_go(multiflash: &mut SimMultiFlash, areadesc: &AreaDesc,
-               counter: Option<&mut i32>, catch_asserts: bool) -> (i32, u8) {
+               counter: Option<&mut i32>, catch_asserts: bool) -> BootStatus {
     unsafe {
         for (&dev_id, flash) in multiflash.iter_mut() {
             api::set_flash(dev_id, flash);
@@ -41,7 +56,7 @@ pub fn boot_go(multiflash: &mut SimMultiFlash, areadesc: &AreaDesc,
             api::clear_flash(dev_id);
         }
     };
-    (result, asserts)
+    BootStatus { result, asserts }
 }
 
 pub fn boot_trailer_sz(align: u32) -> u32 {
