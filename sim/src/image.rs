@@ -34,7 +34,8 @@ use aes_ctr::{
 };
 
 use simflash::{Flash, SimFlash, SimMultiFlash};
-use mcuboot_sys::{c, AreaDesc, FlashId};
+use mcuboot_sys::{c, AreaDesc};
+pub use mcuboot_sys::FlashId;
 use crate::{
     ALL_DEVICES,
     DeviceName,
@@ -904,7 +905,7 @@ impl Images {
     }
 
     /// Run a basic test of upgrades with images in the direct-xip case.
-    pub fn run_direct_xip(&self) -> bool {
+    pub fn run_direct_xip(&self, image: FlashId) -> bool {
         if !Caps::DirectXIP.present() {
             return false;
         }
@@ -920,7 +921,7 @@ impl Images {
         }
 
         // Find the corresponding area.
-        if let Some((offset, _, id)) = self.areadesc.find(FlashId::Image1) {
+        if let Some((offset, _, id)) = self.areadesc.find(image) {
             if id != result.flash_dev_id || offset != result.image_offset as usize {
                 warn!("Direct-xip didn't find right image");
                 return true;

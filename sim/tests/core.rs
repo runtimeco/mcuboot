@@ -12,6 +12,7 @@ use bootsim::{
     DepTest, DepType, UpgradeInfo,
     ImagesBuilder,
     Images,
+    FlashId,
     NO_DEPS,
     REV_DEPS,
     testlog,
@@ -58,7 +59,8 @@ sim_test!(norevert, make_image(&NO_DEPS, true), run_norevert());
 sim_test!(status_write_fails_complete, make_image(&NO_DEPS, true), run_with_status_fails_complete());
 sim_test!(status_write_fails_with_reset, make_image(&NO_DEPS, true), run_with_status_fails_with_reset());
 sim_test!(downgrade_prevention, make_image(&REV_DEPS, true), run_nodowngrade());
-sim_test!(direct_xip, make_image(&NO_DEPS, true), run_direct_xip());
+sim_test!(direct_xip, make_image(&NO_DEPS, true), run_direct_xip(FlashId::Image1));
+sim_test!(direct_xip_rev, make_image(&REV_DEPS, true), run_direct_xip(FlashId::Image0));
 
 // Test various combinations of incorrect dependencies.
 test_shell!(dependency_combos, r, {
