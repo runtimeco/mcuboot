@@ -19,6 +19,7 @@ mod tlv;
 pub mod testlog;
 
 pub use crate::{
+    caps::Caps,
     depends::{
         DepTest,
         DepType,
@@ -29,6 +30,7 @@ pub use crate::{
     image::{
         ImagesBuilder,
         Images,
+        FlashId,
         show_sizes,
     },
 };

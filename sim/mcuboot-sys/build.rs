@@ -24,6 +24,7 @@ fn main() {
     let bootstrap = env::var("CARGO_FEATURE_BOOTSTRAP").is_ok();
     let multiimage = env::var("CARGO_FEATURE_MULTIIMAGE").is_ok();
     let downgrade_prevention = env::var("CARGO_FEATURE_DOWNGRADE_PREVENTION").is_ok();
+    let direct_xip = env::var("CARGO_FEATURE_DIRECT_XIP").is_ok();
 
     let mut conf = cc::Build::new();
     conf.define("__BOOTSIM__", None);
@@ -126,6 +127,10 @@ fn main() {
 
     if swap_move {
         conf.define("MCUBOOT_SWAP_USING_MOVE", None);
+    }
+
+    if direct_xip {
+        conf.define("MCUBOOT_DIRECT_XIP", None);
     }
 
     if enc_rsa {

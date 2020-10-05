@@ -34,7 +34,8 @@ use aes_ctr::{
 };
 
 use simflash::{Flash, SimFlash, SimMultiFlash};
-use mcuboot_sys::{c, AreaDesc, FlashId};
+use mcuboot_sys::{c, AreaDesc};
+pub use mcuboot_sys::FlashId;
 use crate::{
     ALL_DEVICES,
     DeviceName,
@@ -206,7 +207,10 @@ impl ImagesBuilder {
         }
 
         // upgrades without fails, counts number of flash operations
-        let total_count = match images.run_basic_upgrade(permanent) {
+        let total_count = if Caps::DirectXIP.present() {
+            0
+        } else {
+            match images.run_basic_upgrade(permanent) {
             Ok(v)  => v,
             Err(_) =>
                 if deps.upgrades.iter().any(|u| *u == UpgradeInfo::Held) {
@@ -214,6 +218,7 @@ impl ImagesBuilder {
                 } else {
                     panic!("Unable to perform basic upgrade");
                 }
+            }
         };
 
         images.total_count = Some(total_count);
@@ -412,7 +417,7 @@ impl Images {
     }
 
     pub fn run_basic_revert(&self) -> bool {
-        if Caps::OverwriteUpgrade.present() {
+        if !Caps::has_swap() {
             return false;
         }
 
@@ -479,6 +484,13 @@ impl Images {
     pub fn run_perm_with_random_fails(&self, total_fails: usize) -> bool {
         let mut fails = 0;
         let total_flash_ops = self.total_count.unwrap();
+
+        // If the configured upgrade process doesn't perform any flash
+        // operations, there isn't anything to test.
+        if total_flash_ops == 0 {
+            return false;
+        }
+
         let (flash, total_counts) = self.try_random_fails(total_flash_ops, total_fails);
         info!("Random interruptions at reset points={:?}", total_counts);
 
@@ -515,7 +527,7 @@ impl Images {
     }
 
     pub fn run_revert_with_fails(&self) -> bool {
-        if Caps::OverwriteUpgrade.present() {
+        if !Caps::has_swap() {
             return false;
         }
 
@@ -535,7 +547,7 @@ impl Images {
     }
 
     pub fn run_norevert(&self) -> bool {
-        if Caps::OverwriteUpgrade.present() {
+        if !Caps::has_swap() {
             return false;
         }
 
@@ -545,8 +557,8 @@ impl Images {
         info!("Try norevert");
 
         // First do a normal upgrade...
-        let (result, _) = c::boot_go(&mut flash, &self.areadesc, None, false);
-        if result != 0 {
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
             warn!("Failed first boot");
             fails += 1;
         }
@@ -579,8 +591,8 @@ impl Images {
             fails += 1;
         }
 
-        let (result, _) = c::boot_go(&mut flash, &self.areadesc, None, false);
-        if result != 0 {
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
             warn!("Failed second boot");
             fails += 1;
         }
@@ -615,8 +627,8 @@ impl Images {
         info!("Try no downgrade");
 
         // First, do a normal upgrade.
-        let (result, _) = c::boot_go(&mut flash, &self.areadesc, None, false);
-        if result != 0 {
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
             warn!("Failed first boot");
             fails += 1;
         }
@@ -653,8 +665,8 @@ impl Images {
         }
 
         // Run the bootloader...
-        let (result, _) = c::boot_go(&mut flash, &self.areadesc, None, false);
-        if result != 0 {
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
             warn!("Failed first boot");
             fails += 1;
         }
@@ -702,8 +714,8 @@ impl Images {
         }
 
         // Run the bootloader...
-        let (result, _) = c::boot_go(&mut flash, &self.areadesc, None, false);
-        if result != 0 {
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
             warn!("Failed first boot");
             fails += 1;
         }
@@ -739,8 +751,8 @@ impl Images {
         self.mark_upgrades(&mut flash, 1);
 
         // Run the bootloader...
-        let (result, _) = c::boot_go(&mut flash, &self.areadesc, None, false);
-        if result != 0 {
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
             warn!("Failed first boot");
             fails += 1;
         }
@@ -787,15 +799,15 @@ impl Images {
         self.mark_permanent_upgrades(&mut flash, 1);
         self.mark_bad_status_with_rate(&mut flash, 0, 1.0);
 
-        let (result, asserts) = c::boot_go(&mut flash, &self.areadesc, None, true);
-        if result != 0 {
+        let result = c::boot_go(&mut flash, &self.areadesc, None, true);
+        if !result.is_success() {
             warn!("Failed!");
             fails += 1;
         }
 
         // Failed writes to the marked "bad" region don't assert anymore.
         // Any detected assert() is happening in another part of the code.
-        if asserts != 0 {
+        if result.asserts != 0 {
             warn!("At least one assert() was called");
             fails += 1;
         }
@@ -813,8 +825,8 @@ impl Images {
 
         info!("validate primary slot enabled; \
                re-run of boot_go should just work");
-        let (result, _) = c::boot_go(&mut flash, &self.areadesc, None, false);
-        if result != 0 {
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
             warn!("Failed!");
             fails += 1;
         }
@@ -830,7 +842,7 @@ impl Images {
     /// allowing for fails in the status area. This should run to the end
     /// and warn that write fails were detected...
     pub fn run_with_status_fails_with_reset(&self) -> bool {
-        if Caps::OverwriteUpgrade.present() {
+        if !Caps::has_swap() {
             false
         } else if Caps::ValidatePrimarySlot.present() {
 
@@ -846,8 +858,8 @@ impl Images {
             self.mark_bad_status_with_rate(&mut flash, 0, 0.5);
 
             // Should not fail, writing to bad regions does not assert
-            let (_, asserts) = c::boot_go(&mut flash, &self.areadesc, Some(&mut count), true);
-            if asserts != 0 {
+            let result = c::boot_go(&mut flash, &self.areadesc, Some(&mut count), true);
+            if result.asserts != 0 {
                 warn!("At least one assert() was called");
                 fails += 1;
             }
@@ -855,15 +867,15 @@ impl Images {
             self.reset_bad_status(&mut flash, 0);
 
             info!("Resuming an interrupted swap operation");
-            let (_, asserts) = c::boot_go(&mut flash, &self.areadesc, None, true);
+            let result = c::boot_go(&mut flash, &self.areadesc, None, true);
 
             // This might throw no asserts, for large sector devices, where
             // a single failure writing is indistinguishable from no failure,
             // or throw a single assert for small sector devices that fail
             // multiple times...
-            if asserts > 1 {
+            if result.asserts > 1 {
                 warn!("Expected single assert validating the primary slot, \
-                       more detected {}", asserts);
+                       more detected {}", result.asserts);
                 fails += 1;
             }
 
@@ -882,8 +894,8 @@ impl Images {
             self.mark_bad_status_with_rate(&mut flash, 0, 1.0);
 
             // This is expected to fail while writing to bad regions...
-            let (_, asserts) = c::boot_go(&mut flash, &self.areadesc, None, true);
-            if asserts == 0 {
+            let result = c::boot_go(&mut flash, &self.areadesc, None, true);
+            if result.asserts == 0 {
                 warn!("No assert() detected");
                 fails += 1;
             }
@@ -892,10 +904,39 @@ impl Images {
         }
     }
 
+    /// Run a basic test of upgrades with images in the direct-xip case.
+    pub fn run_direct_xip(&self, image: FlashId) -> bool {
+        if !Caps::DirectXIP.present() {
+            return false;
+        }
+
+        // Clone the flash, but we only need a single flash because we will
+        // verify that it is unchanged.
+        let mut flash = self.flash.clone();
+
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
+            warn!("Failed to detect upgrade");
+            return true;
+        }
+
+        // Find the corresponding area.
+        if let Some((offset, _, id)) = self.areadesc.find(image) {
+            if id != result.flash_dev_id || offset != result.image_offset as usize {
+                warn!("Direct-xip didn't find right image");
+                return true;
+            }
+        } else {
+            panic!("Device doesn't appear to have an Image1 area at all");
+        }
+
+        false
+    }
+
     /// Adds a new flash area that fails statistically
     fn mark_bad_status_with_rate(&self, flash: &mut SimMultiFlash, slot: usize,
                                  rate: f32) {
-        if Caps::OverwriteUpgrade.present() {
+        if !Caps::has_swap() {
             return;
         }
 
@@ -941,19 +982,19 @@ impl Images {
 
         let mut counter = stop.unwrap_or(0);
 
-        let (first_interrupted, count) = match c::boot_go(&mut flash, &self.areadesc, Some(&mut counter), false) {
-            (-0x13579, _) => (true, stop.unwrap()),
-            (0, _) => (false, -counter),
-            (x, _) => panic!("Unknown return: {}", x),
+        let (first_interrupted, count) = match c::boot_go(&mut flash, &self.areadesc, Some(&mut counter), false).result {
+            -0x13579 => (true, stop.unwrap()),
+            0 => (false, -counter),
+            x => panic!("Unknown return: {}", x),
         };
 
         counter = 0;
         if first_interrupted {
             // fl.dump();
-            match c::boot_go(&mut flash, &self.areadesc, Some(&mut counter), false) {
-                (-0x13579, _) => panic!("Shouldn't stop again"),
-                (0, _) => (),
-                (x, _) => panic!("Unknown return: {}", x),
+            match c::boot_go(&mut flash, &self.areadesc, Some(&mut counter), false).result {
+                -0x13579 => panic!("Shouldn't stop again"),
+                0 => (),
+                x => panic!("Unknown return: {}", x),
             }
         }
 
@@ -966,7 +1007,9 @@ impl Images {
         // fl.write_file("image0.bin").unwrap();
         for i in 0 .. count {
             info!("Running boot pass {}", i + 1);
-            assert_eq!(c::boot_go(&mut flash, &self.areadesc, None, false), (0, 0));
+            let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+            assert_eq!(result.result, 0);
+            assert_eq!(result.asserts, 0);
         }
         flash
     }
@@ -976,8 +1019,8 @@ impl Images {
         let mut fails = 0;
 
         let mut counter = stop;
-        let (x, _) = c::boot_go(&mut flash, &self.areadesc, Some(&mut counter), false);
-        if x != -0x13579 {
+        let result = c::boot_go(&mut flash, &self.areadesc, Some(&mut counter), false);
+        if result.result != -0x13579 {
             warn!("Should have stopped test at interruption point");
             fails += 1;
         }
@@ -989,8 +1032,8 @@ impl Images {
             fails += 1;
         }
 
-        let (x, _) = c::boot_go(&mut flash, &self.areadesc, None, false);
-        if x != 0 {
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
             warn!("Should have finished test upgrade");
             fails += 1;
         }
@@ -1018,14 +1061,14 @@ impl Images {
 
         // Do Revert
         let mut counter = stop;
-        let (x, _) = c::boot_go(&mut flash, &self.areadesc, Some(&mut counter), false);
-        if x != -0x13579 {
+        let result = c::boot_go(&mut flash, &self.areadesc, Some(&mut counter), false);
+        if result.result != -0x13579 {
             warn!("Should have stopped revert at interruption point");
             fails += 1;
         }
 
-        let (x, _) = c::boot_go(&mut flash, &self.areadesc, None, false);
-        if x != 0 {
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
             warn!("Should have finished revert upgrade");
             fails += 1;
         }
@@ -1052,8 +1095,8 @@ impl Images {
             fails += 1;
         }
 
-        let (x, _) = c::boot_go(&mut flash, &self.areadesc, None, false);
-        if x != 0 {
+        let result = c::boot_go(&mut flash, &self.areadesc, None, false);
+        if !result.is_success() {
             warn!("Should have finished 3rd boot");
             fails += 1;
         }
@@ -1082,18 +1125,18 @@ impl Images {
         for i in 0 .. count {
             let reset_counter = rng.gen_range(1, remaining_ops / 2);
             let mut counter = reset_counter;
-            match c::boot_go(&mut flash, &self.areadesc, Some(&mut counter), false) {
-                (0, _) | (-0x13579, _) => (),
-                (x, _) => panic!("Unknown return: {}", x),
+            match c::boot_go(&mut flash, &self.areadesc, Some(&mut counter), false).result {
+                0 | -0x13579 => (),
+                x => panic!("Unknown return: {}", x),
             }
             remaining_ops -= reset_counter;
             resets[i] = reset_counter;
         }
 
-        match c::boot_go(&mut flash, &self.areadesc, None, false) {
-            (-0x13579, _) => panic!("Should not be have been interrupted!"),
-            (0, _) => (),
-            (x, _) => panic!("Unknown return: {}", x),
+        match c::boot_go(&mut flash, &self.areadesc, None, false).result {
+            -0x13579 => panic!("Should not be have been interrupted!"),
+            0 => (),
+            x => panic!("Unknown return: {}", x),
         }
 
         (flash, resets)
@@ -1443,7 +1486,7 @@ fn verify_image(flash: &SimMultiFlash, slot: &SlotInfo, images: &ImageData) -> b
 fn verify_trailer(flash: &SimMultiFlash, slot: &SlotInfo,
                   magic: Option<u8>, image_ok: Option<u8>,
                   copy_done: Option<u8>) -> bool {
-    if Caps::OverwriteUpgrade.present() {
+    if !Caps::has_swap() {
         return true;
     }
 

@@ -22,12 +22,14 @@ bootstrap = ["mcuboot-sys/bootstrap"]
 multiimage = ["mcuboot-sys/multiimage"]
 large-write = []
 downgrade-prevention = ["mcuboot-sys/downgrade-prevention"]
+direct-xip = ["mcuboot-sys/direct-xip"]
 
 [dependencies]
 byteorder = "1.3"
 libc = "0.2"
 rand = { version = "0.7", features = ["small_rng"] }
 docopt = "1.1.0"
+enum-iterator = "0.6"
 serde = "1.0"
 serde_derive = "1.0"
 log = "0.4"

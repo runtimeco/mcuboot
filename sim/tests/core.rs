@@ -8,9 +8,11 @@
 //! Run the existing testsuite as a Rust unit test.
 
 use bootsim::{
+    Caps,
     DepTest, DepType, UpgradeInfo,
     ImagesBuilder,
     Images,
+    FlashId,
     NO_DEPS,
     REV_DEPS,
     testlog,
@@ -57,6 +59,8 @@ sim_test!(norevert, make_image(&NO_DEPS, true), run_norevert());
 sim_test!(status_write_fails_complete, make_image(&NO_DEPS, true), run_with_status_fails_complete());
 sim_test!(status_write_fails_with_reset, make_image(&NO_DEPS, true), run_with_status_fails_with_reset());
 sim_test!(downgrade_prevention, make_image(&REV_DEPS, true), run_nodowngrade());
+sim_test!(direct_xip, make_image(&NO_DEPS, true), run_direct_xip(FlashId::Image1));
+sim_test!(direct_xip_rev, make_image(&REV_DEPS, true), run_direct_xip(FlashId::Image0));
 
 // Test various combinations of incorrect dependencies.
 test_shell!(dependency_combos, r, {
@@ -165,6 +169,9 @@ static IMAGE_NUMBER: AtomicUsize = AtomicUsize::new(0);
 /// image will be dumped.  As a special case, we will dump everything if
 /// this environment variable is set to all.
 fn dump_image(image: &Images, name: &str) {
+    if let Ok(_) = env::var("MCUBOOT_SHOW_CAPS") {
+        Caps::show();
+    }
     if let Ok(request) = env::var("MCUBOOT_DEBUG_DUMP") {
         if request.split(',').any(|req| {
             req == "all" || name.contains(req)
