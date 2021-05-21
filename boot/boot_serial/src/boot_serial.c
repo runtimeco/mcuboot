@@ -60,6 +60,10 @@
 #include "bootutil_priv.h"
 #endif
 
+#ifdef MCUBOOT_ENC_IMAGES
+#include "single_loader.h"
+#endif
+
 #include "serial_recovery_cbor.h"
 
 MCUBOOT_LOG_MODULE_DECLARE(mcuboot);
@@ -89,7 +93,8 @@ MCUBOOT_LOG_MODULE_DECLARE(mcuboot);
 #endif
 
 static char in_buf[BOOT_SERIAL_INPUT_MAX + 1];
-static char dec_buf[BOOT_SERIAL_INPUT_MAX + 1];
+static char dec_buf[BOOT_SERIAL_INPUT_MAX + 1] __attribute__((aligned));
+static uint8_t img_buf[BOOT_SERIAL_INPUT_MAX + 1] __attribute__((aligned));
 const struct boot_uart_funcs *boot_uf;
 static uint32_t curr_off;
 static uint32_t img_size;
@@ -106,6 +111,7 @@ static struct cbor_encoder_writer bs_writer = {
 };
 static CborEncoder bs_root;
 static CborEncoder bs_rsp;
+static int bs_echoreceived;
 
 int
 bs_cbor_writer(struct cbor_encoder_writer *cew, const char *data, int len)
@@ -193,8 +199,22 @@ bs_list(char *buf, int len)
 
             flash_area_read(fap, 0, &hdr, sizeof(hdr));
 
-            if (hdr.ih_magic != IMAGE_MAGIC ||
-              bootutil_img_validate(NULL, 0, &hdr, fap, tmpbuf, sizeof(tmpbuf),
+            if (hdr.ih_magic != IMAGE_MAGIC) {
+                flash_area_close(fap);
+                continue;
+            }
+#ifdef MCUBOOT_ENC_IMAGES
+            if (slot == 0 && hdr.ih_flags & IMAGE_F_ENCRYPTED) {
+                /* Clear the encrypted flag we didn't supply a key
+                * This flag could be set if there was a decryption in place
+                * performed before. We will try to validate the image without
+                * decryption by clearing the flag in the heder. If 
+                * still encrypted the validation will fail.
+                */
+                hdr.ih_flags &= ~IMAGE_F_ENCRYPTED;
+            }
+#endif
+            if (bootutil_img_validate(NULL, 0, &hdr, fap, tmpbuf, sizeof(tmpbuf),
                                     NULL, 0, NULL)) {
                 flash_area_close(fap);
                 continue;
@@ -288,6 +308,13 @@ bs_upload(char *buf, int len)
          * Offset must be set in every block.
          */
         goto out_invalid_data;
+    }
+    if (img_blen < sizeof(img_buf)) {
+        /*
+         * support unalignment of the image data buffer for cpu's which don't support unaligned data access
+         */
+        memcpy(img_buf, img_data, img_blen);
+        img_data = img_buf;
     }
 
     rc = flash_area_open(flash_area_id_from_multi_image_slot(img_num, 0), &fap);
@@ -411,7 +438,43 @@ out:
 
     boot_serial_output();
     flash_area_close(fap);
+
+#ifdef MCUBOOT_ENC_IMAGES
+    if (curr_off == img_size) {
+        /* Last sector received, now start a decryption on the image if it is encrypted*/
+        rc = boot_handle_enc_fw();
+    }
+#endif //#ifdef MCUBOOT_ENC_IMAGES
 }
+
+static void
+bs_echo(char *buf, int len)
+{
+    cbor_encoder_create_map(&bs_root, &bs_rsp, CborIndefiniteLength);
+    const char *echo_buf="";
+    size_t echo_buflen = strlen(echo_buf);
+	size_t elem_count = 1;
+	size_t bsstrdecoded;
+
+	cbor_string_type_t str[2];
+	cbor_decode_state_t state = {
+		.p_payload = (uint8_t*)buf,
+		.p_payload_end = (uint8_t*)buf + len,
+		.elem_count = 1
+	};
+
+	if (list_start_decode(&state, &elem_count, 1, 1) &&
+		multi_decode(2, 2, &bsstrdecoded, (void*)strx_decode, &state,str, NULL, NULL,sizeof(cbor_string_type_t))) {
+		echo_buf = (char*)str[1].value;
+		echo_buflen = str[1].len;
+	}
+    cbor_encode_text_stringz(&bs_rsp, "r");
+    cbor_encode_text_string(&bs_rsp, echo_buf, echo_buflen);
+    cbor_encoder_close_container(&bs_root, &bs_rsp);
+    boot_serial_output();
+    bs_echoreceived = 1;
+}
+
 
 /*
  * Console echo control/image erase. Send empty response, don't do anything.
@@ -489,6 +552,9 @@ boot_serial_input(char *buf, int len)
         }
     } else if (hdr->nh_group == MGMT_GROUP_ID_DEFAULT) {
         switch (hdr->nh_id) {
+        case NMGR_ID_ECHO:
+            bs_echo(buf, len);
+            break;
         case NMGR_ID_CONS_ECHO_CTRL:
             bs_empty_rsp(buf, len);
             break;
@@ -656,5 +722,67 @@ boot_serial_start(const struct boot_uart_funcs *f)
             boot_serial_input(&dec_buf[2], dec_off - 2);
         }
         off = 0;
+    }
+}
+
+/*
+ * Task which waits reading console for a certain amount of timeout.
+ * If within this timeout no echo command is received, the function is
+ * returning, else the serial boot is never exited
+ */
+void
+boot_serial_check_start(const struct boot_uart_funcs *f,int32_t timeout_in_ms)
+{
+    int rc;
+    int off;
+    int dec_off = 0;
+    int full_line;
+    int max_input;
+
+    boot_uf = f;
+    max_input = sizeof(in_buf);
+    bs_echoreceived = 0;
+    off = 0;
+    while (timeout_in_ms > 0 || bs_echoreceived) {
+#ifdef __ZEPHYR__
+        uint32_t start = k_uptime_get_32();
+#else
+        uint32_t start = os_get_uptime_usec()/1000;
+#endif
+        rc = f->read(in_buf + off, sizeof(in_buf) - off, &full_line);
+        if (rc <= 0 && !full_line) {
+            goto check_timeout;
+        }
+        off += rc;
+        if (!full_line) {
+            if (off == max_input) {
+                /*
+                 * Full line, no newline yet. Reset the input buffer.
+                 */
+                off = 0;
+            }
+            goto check_timeout;
+        }
+        if (in_buf[0] == SHELL_NLIP_PKT_START1 &&
+          in_buf[1] == SHELL_NLIP_PKT_START2) {
+            dec_off = 0;
+            rc = boot_serial_in_dec(&in_buf[2], off - 2, dec_buf, &dec_off, max_input);
+        } else if (in_buf[0] == SHELL_NLIP_DATA_START1 &&
+          in_buf[1] == SHELL_NLIP_DATA_START2) {
+            rc = boot_serial_in_dec(&in_buf[2], off - 2, dec_buf, &dec_off, max_input);
+        }
+
+        /* serve errors: out of decode memory, or bad encoding */
+        if (rc == 1) {
+            boot_serial_input(&dec_buf[2], dec_off - 2);
+        }
+        off = 0;
+    check_timeout:
+        /* Subtract elapsed time */
+#ifdef __ZEPHYR__
+        timeout_in_ms -= (k_uptime_get_32() - start);
+#else
+        timeout_in_ms -= (os_get_uptime_usec()/1000 - start);
+#endif
     }
 }

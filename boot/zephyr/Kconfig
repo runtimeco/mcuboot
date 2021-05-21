@@ -184,6 +184,15 @@ config BOOT_VALIDATE_SLOT0
 	  every boot, but can mitigate against some changes that are
 	  able to modify the flash image itself.
 
+config BOOT_VALIDATE_SLOT0_ONCE
+	bool "Validate image in the primary slot just once after after upgrade"
+	depends on !BOOT_VALIDATE_SLOT0 && SINGLE_APPLICATION_SLOT
+	default n
+	help
+	  If y, the bootloader attempts to validate the signature of the
+	  primary slot once after an upgrade of the main partition. This adds the signature check time
+	  only once after upgrade instead of every boot
+
 if !SINGLE_APPLICATION_SLOT
 choice
 	prompt "Image upgrade modes"
@@ -288,6 +297,21 @@ config BOOT_ENCRYPT_X25519
 	  encryption mechanism used in this case is ECIES using primitives
 	  described under "ECIES-X25519 encryption" in docs/encrypted_images.md.
 endif # !SINGLE_APPLICATION_SLOT
+
+config BOOT_ENCRYPTION_KEY_FILE
+	string "encryption key file"
+    depends on BOOT_ENCRYPT_EC256 || BOOT_SERIAL_ENCRYPT_EC256
+	default "enc-ec256-priv.pem" if BOOT_SIGNATURE_TYPE_ECDSA_P256
+	default ""
+	help
+	  You can use either absolute or relative path.
+	  In case relative path is used, the build system assumes that it starts
+	  from the directory where the MCUBoot KConfig configuration file is
+	  located. If the key file is not there, the build system uses relative
+	  path that starts from the MCUBoot repository root directory.
+	  The key file will be parsed by imgtool's getpriv command and a .c source
+	  with the public key information will be written in a format expected by
+	  MCUboot.
 
 config BOOT_MAX_IMG_SECTORS
 	int "Maximum number of sectors per image slot"
@@ -552,6 +576,32 @@ config RECOVERY_UART_DEV_NAME
 	help
 	  This option specifies the name of UART device to be used for
 	  serial recovery.
+
+config BOOT_SERIAL_WAIT_FOR_DFU
+	bool "Wait for a prescribed duration to see if DFU is invoked by sending a echo comand"
+	default n
+	depends on BOOT_SERIAL_UART
+	help
+	  If y, MCUboot waits for a prescribed duration of time to allow
+	  for DFU to be invoked. The serial recovery can be entered by sending a
+	  echo command. This will enter the serial recovery. Please note DFU always updates the
+	  slot1 image.
+
+config BOOT_SERIAL_WAIT_FOR_DFU_TIMEOUT
+	int "Duration to wait for the serial DFU timeout in ms"
+	default 500
+	depends on BOOT_SERIAL_WAIT_FOR_DFU
+	help
+	  timeout in ms for MCUboot to wait to allow for DFU to be invoked.
+
+config BOOT_SERIAL_ENCRYPT_EC256
+	bool "Support for encrypted upgrade images using ECIES-P256 in serial recovery upload"
+	default n
+	help
+	  If y, uploaded images via serial recovery can be decrypted
+	  on the fly when upgrading to the primary slot. The
+	  encryption mechanism used in this case is ECIES using primitives
+	  described under "ECIES-P256 encryption" in docs/encrypted_images.md.
 
 endif # MCUBOOT_SERIAL
 
