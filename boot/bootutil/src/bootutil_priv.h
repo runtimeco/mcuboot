@@ -139,16 +139,24 @@ struct boot_status {
  *  |                 Encryption key 0 (16 octets) [*]              |
  *  |                                                               |
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |  0xff padding as needed (BOOT_MAX_ALIGN - 16 EK0 octets) [*]  |
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *  |                 Encryption key 1 (16 octets) [*]              |
  *  |                                                               |
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |  0xff padding as needed (BOOT_MAX_ALIGN - 16 EK1 octets) [*]  |
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *  |                      Swap size (4 octets)                     |
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *  |   Swap info   |           0xff padding (7 octets)             |
+ *  | 0xff padding as needed (BOOT_MAX_ALIGN - 4 Swap Size octets)  |
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *  |   Copy done   |           0xff padding (7 octets)             |
+ *  |   Swap info   |   0xff padding (BOOT_MAX_ALIGN - 1 octets)    |
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *  |   Image OK    |           0xff padding (7 octets)             |
+ *  |   Copy done   |   0xff padding (BOOT_MAX_ALIGN - 1 octets)    |
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |   Image OK    |   0xff padding (BOOT_MAX_ALIGN - 1 octets)    |
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |   0xff padding as needed (BOOT_MAX_ALIGN - 16 MAGIC octets)   |
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *  |                       MAGIC (16 octets)                       |
  *  |                                                               |
@@ -214,17 +222,6 @@ _Static_assert(BOOT_IMAGE_NUMBER > 0, "Invalid value for BOOT_IMAGE_NUMBER");
                  (hdr)->ih_ver.iv_revision,                               \
                  (hdr)->ih_ver.iv_build_num)
 
-/*
- * The current flashmap API does not check the amount of space allocated when
- * loading sector data from the flash device, allowing for smaller counts here
- * would most surely incur in overruns.
- *
- * TODO: make flashmap API receive the current sector array size.
- */
-#if BOOT_MAX_IMG_SECTORS < 32
-#error "Too few sectors, please increase BOOT_MAX_IMG_SECTORS to at least 32"
-#endif
-
 #if MCUBOOT_SWAP_USING_MOVE
 #define BOOT_STATUS_MOVE_STATE_COUNT    1
 #define BOOT_STATUS_SWAP_STATE_COUNT    2
@@ -242,8 +239,6 @@ _Static_assert(BOOT_IMAGE_NUMBER > 0, "Invalid value for BOOT_IMAGE_NUMBER");
 #define BOOT_STATUS_SOURCE_NONE         0
 #define BOOT_STATUS_SOURCE_SCRATCH      1
 #define BOOT_STATUS_SOURCE_PRIMARY_SLOT 2
-
-#define BOOT_MAGIC_SZ (sizeof boot_img_magic)
 
 /**
  * Compatibility shim for flash sector type.
