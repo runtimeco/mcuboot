@@ -623,7 +623,7 @@ boot_enc_decrypt(const uint8_t *buf, uint8_t *enckey, uint32_t sz, uint8_t *enci
 
     bootutil_hmac_sha256_init(&hmac);
 
-    rc = bootutil_hmac_sha256_set_key(&hmac, &derived_key[BOOT_ENC_KEY_SIZE], 32);
+    rc = bootutil_hmac_sha256_set_key(&hmac, &derived_key[BOOT_ENC_KEY_SIZE], BOOTUTIL_CRYPTO_SHA256_DIGEST_SIZE);
     if (rc != 0) {
         (void)bootutil_hmac_sha256_drop(&hmac);
         return -1;
@@ -767,13 +767,23 @@ boot_encrypt(struct enc_key_data *enc_state, int image_index,
     /* boot_copy_region will call boot_encrypt with sz = 0 when skipping over
        the TLVs. */
     if (sz == 0) {
-       return;
+        return;
     }
 
-    rc = flash_area_id_to_multi_image_slot(image_index, flash_area_get_id(fap));
-    if (rc < 0) {
-        assert(0);
-        return;
+#if MCUBOOT_SWAP_USING_SCRATCH
+/* in this case scratch area contains encrypted source block that was copied
+from secondary slot */
+    if (fap->fa_id == FLASH_AREA_IMAGE_SCRATCH) {
+        rc = 1;
+    }
+    else
+#endif
+    {
+        rc = flash_area_id_to_multi_image_slot(image_index, flash_area_get_id(fap));
+        if (rc < 0) {
+            assert(0);
+            return;
+        }
     }
 
     enc = &enc_state[rc];
