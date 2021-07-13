@@ -3,6 +3,7 @@
  *
  * Copyright (c) 2016-2019 JUUL Labs
  * Copyright (c) 2017 Linaro LTD
+ * Copyright (C) 2021 Arm Limited
  *
  * Original license:
  *
@@ -42,6 +43,13 @@
 #include "bootutil/crypto/ecdsa_p256.h"
 #include "bootutil_priv.h"
 
+/* Extract a member of the mbedtls context structure. */
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+#define MBEDTLS_CONTEXT_MEMBER(X) MBEDTLS_PRIVATE(X)
+#else
+#define MBEDTLS_CONTEXT_MEMBER(X) X
+#endif
+
 /*
  * Declaring these like this adds NULL termination.
  */
@@ -68,12 +76,12 @@ bootutil_parse_eckey(mbedtls_ecdsa_context *ctx, uint8_t **p, uint8_t *end)
     if (mbedtls_asn1_get_alg(p, end, &alg, &param)) {
         return -2;
     }
-    if (alg.len != sizeof(ec_pubkey_oid) - 1 ||
-      memcmp(alg.p, ec_pubkey_oid, sizeof(ec_pubkey_oid) - 1)) {
+    if (alg.MBEDTLS_CONTEXT_MEMBER(len) != sizeof(ec_pubkey_oid) - 1 ||
+      memcmp(alg.MBEDTLS_CONTEXT_MEMBER(p), ec_pubkey_oid, sizeof(ec_pubkey_oid) - 1)) {
         return -3;
     }
-    if (param.len != sizeof(ec_secp256r1_oid) - 1||
-      memcmp(param.p, ec_secp256r1_oid, sizeof(ec_secp256r1_oid) - 1)) {
+    if (param.MBEDTLS_CONTEXT_MEMBER(len) != sizeof(ec_secp256r1_oid) - 1||
+      memcmp(param.MBEDTLS_CONTEXT_MEMBER(p), ec_secp256r1_oid, sizeof(ec_secp256r1_oid) - 1)) {
         return -4;
     }
 
@@ -116,13 +124,13 @@ bootutil_import_key(uint8_t **cp, uint8_t *end)
         return -2;
     }
     /* id-ecPublicKey (RFC5480) */
-    if (alg.len != sizeof(ec_pubkey_oid) - 1 ||
-        memcmp(alg.p, ec_pubkey_oid, sizeof(ec_pubkey_oid) - 1)) {
+    if (alg.MBEDTLS_CONTEXT_MEMBER(len) != sizeof(ec_pubkey_oid) - 1 ||
+        memcmp(alg.MBEDTLS_CONTEXT_MEMBER(p), ec_pubkey_oid, sizeof(ec_pubkey_oid) - 1)) {
         return -3;
     }
     /* namedCurve (RFC5480) */
-    if (param.len != sizeof(ec_secp256r1_oid) - 1 ||
-        memcmp(param.p, ec_secp256r1_oid, sizeof(ec_secp256r1_oid) - 1)) {
+    if (param.MBEDTLS_CONTEXT_MEMBER(len) != sizeof(ec_secp256r1_oid) - 1 ||
+        memcmp(param.MBEDTLS_CONTEXT_MEMBER(p), ec_secp256r1_oid, sizeof(ec_secp256r1_oid) - 1)) {
         return -4;
     }
     /* ECPoint (RFC5480) */
