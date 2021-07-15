@@ -34,6 +34,13 @@
     #define BOOTUTIL_CRYPTO_ECDSA_P256_HASH_SIZE (4 * 8)
 #endif
 
+/* Extract a member of the mbedtls context structure. */
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+#define MBEDTLS_CONTEXT_MEMBER(X) MBEDTLS_PRIVATE(X)
+#else
+#define MBEDTLS_CONTEXT_MEMBER(X) X
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -132,17 +139,17 @@ static inline int bootutil_ecdsa_p256_verify(bootutil_ecdsa_p256_context *ctx,
     (void)sig;
     (void)hash;
 
-    rc = mbedtls_ecp_group_load(&ctx->grp, MBEDTLS_ECP_DP_SECP256R1);
+    rc = mbedtls_ecp_group_load(&ctx->MBEDTLS_CONTEXT_MEMBER(grp), MBEDTLS_ECP_DP_SECP256R1);
     if (rc) {
         return -1;
     }
 
-    rc = mbedtls_ecp_point_read_binary(&ctx->grp, &ctx->Q, pk, pk_len);
+    rc = mbedtls_ecp_point_read_binary(&ctx->MBEDTLS_CONTEXT_MEMBER(grp), &ctx->MBEDTLS_CONTEXT_MEMBER(Q), pk, pk_len);
     if (rc) {
         return -1;
     }
 
-    rc = mbedtls_ecp_check_pubkey(&ctx->grp, &ctx->Q);
+    rc = mbedtls_ecp_check_pubkey(&ctx->MBEDTLS_CONTEXT_MEMBER(grp), &ctx->MBEDTLS_CONTEXT_MEMBER(Q));
     if (rc) {
         return -1;
     }
