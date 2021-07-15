@@ -614,6 +614,20 @@ config BOOT_WATCHDOG_FEED
 	  Enables implementation of MCUBOOT_WATCHDOG_FEED() macro which is
 	  used to feed watchdog while doing time consuming operations.
 
+config BOOT_IMAGE_ACCESS_HOOKS
+	bool "Hooks for override MCUboot's native routines"
+	help
+	  Allow to provide procedures for override native MCUboot's routines
+	  required for access the image data and the image update.
+
+config BOOT_IMAGE_ACCESS_HOOKS_FILE
+	string "Hooks implementation file path"
+	depends on BOOT_IMAGE_ACCESS_HOOKS
+	default ""
+	help
+	  Path to the file which implements hooks. Path is relative to
+	  the zephyr port cmake directory (boot/zephyr/).
+
 endmenu
 
 config MCUBOOT_DEVICE_SETTINGS

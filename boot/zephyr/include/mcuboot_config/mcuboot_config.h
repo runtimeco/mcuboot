@@ -151,6 +151,10 @@
 #define MCUBOOT_PERUSER_MGMT_GROUP_ENABLED 0
 #endif
 
+#ifdef CONFIG_BOOT_IMAGE_ACCESS_HOOKS
+#define MCUBOOT_IMAGE_ACCESS_HOOKS
+#endif
+
 /*
  * Enabling this option uses newer flash map APIs. This saves RAM and
  * avoids deprecated API usage.
